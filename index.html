@@ -113,9 +113,26 @@ body::after { content:''; position:fixed; inset:0; background:repeating-linear-g
 .brk { background:var(--gold); color:#000; font-family:'Rajdhani',sans-serif; font-size:9px; font-weight:900; padding:2px 8px; border-radius:3px; letter-spacing:2px; white-space:nowrap; animation:flash 1.5s ease-in-out infinite; }
 @keyframes flash { 0%,100%{opacity:1;} 50%{opacity:.5;} }
 #stxt { font-family:'Rajdhani',sans-serif; font-size:10px; color:rgba(255,255,255,.55); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; flex:1; }
-.hl-wrap { flex:1; display:flex; align-items:center; padding:0 18px; overflow:hidden; }
-#hl { font-size:clamp(15px,2.8vw,32px); font-weight:700; color:#fff; text-shadow:2px 2px 4px rgba(0,0,0,.8); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; transition:opacity .3s,transform .3s; }
-#hl.out { opacity:0; transform:translateY(8px); }
+
+/* Scrolling ticker row */
+.tick-scroll-row { flex:1; display:flex; align-items:center; overflow:hidden; position:relative; }
+.tick-scroll-row::before { content:''; position:absolute; left:0; top:0; bottom:0; width:50px; background:linear-gradient(90deg,#a00,transparent); z-index:2; pointer-events:none; }
+.tick-scroll-row::after  { content:''; position:absolute; right:0; top:0; bottom:0; width:50px; background:linear-gradient(270deg,#a00,transparent); z-index:2; pointer-events:none; }
+#tick-track { display:flex; align-items:center; white-space:nowrap; will-change:transform; }
+.tick-item { font-family:'Noto Sans Devanagari',sans-serif; font-size:clamp(15px,2.5vw,28px); font-weight:700; color:#fff; text-shadow:1px 1px 3px rgba(0,0,0,.8); padding:0 50px; flex-shrink:0; }
+.tick-item.active { color:var(--gold); text-shadow:0 0 14px rgba(245,197,24,0.7); }
+.tick-sep { color:var(--gold); font-size:20px; opacity:0.5; padding:0 10px; flex-shrink:0; }
+
+/* SCENE TRANSITION OVERLAY */
+#trans { position:fixed; inset:0; z-index:800; pointer-events:none; opacity:0; background:transparent; }
+#trans.t-flash { animation:tFlash .35s ease forwards; }
+#trans.t-wipe  { animation:tWipe  .45s ease forwards; }
+#trans.t-zoom  { animation:tZoom  .4s  ease forwards; }
+#trans.t-glitch{ animation:tGlitch .3s steps(2) forwards; }
+@keyframes tFlash  { 0%{opacity:0;background:#e8000d;} 40%{opacity:.8;} 100%{opacity:0;} }
+@keyframes tWipe   { 0%{opacity:1;background:linear-gradient(90deg,#000 0%,#111 100%);clip-path:inset(0 100% 0 0);} 50%{clip-path:inset(0 0% 0 0);opacity:1;} 100%{clip-path:inset(0 0% 0 100%);opacity:0;} }
+@keyframes tZoom   { 0%{opacity:0;} 30%{opacity:1;background:rgba(0,0,0,.85);} 100%{opacity:0;} }
+@keyframes tGlitch { 0%{opacity:1;background:#e8000d;transform:translate(-4px,2px);} 25%{background:#000;transform:translate(4px,-2px);} 50%{background:#e8000d;transform:translate(0,0);} 100%{opacity:0;} }
 
 /* TOAST */
 #toast { position:fixed; top:calc(var(--hh)+12px); left:50%; transform:translateX(-50%) translateY(-10px); background:rgba(10,0,0,.95); border:2px solid var(--red); border-radius:9px; padding:10px 18px; color:#fff; font-size:13px; z-index:2000; opacity:0; transition:all .3s; text-align:center; max-width:88vw; pointer-events:none; }
@@ -200,19 +217,28 @@ body::after { content:''; position:fixed; inset:0; background:repeating-linear-g
   <button class="btn" id="btnP" onclick="doPause()" title="Pause [P]">&#9208;</button>
   <button class="btn" onclick="doPrev()"    title="Prev [<-]">&#9196;</button>
   <button class="btn" id="btnM" onclick="doMute()"  title="Mute [M]">&#128266;</button>
+  <button class="btn" id="btnG" onclick="toggleGS()" title="Green Screen [G]">&#129001;</button>
   <button class="btn" onclick="doRefresh()" title="Refresh [R]">&#128260;</button>
 </div>
 
 <div id="pbar"></div>
 
+<!-- SCENE TRANSITION OVERLAY -->
+<div id="trans"></div>
+
 <!-- TICKER -->
 <div class="ticker">
   <div class="tick-top">
-    <div class="brk">LIVE</div>
+    <div class="brk">BREAKING</div>
     <div style="width:1px;height:10px;background:rgba(255,255,255,.2);flex-shrink:0;"></div>
-    <div id="stxt">PTN News...</div>
+    <div id="stxt">PTN News Studio - Live Broadcast</div>
   </div>
-  <div class="hl-wrap"><div id="hl">Data load ho raha hai...</div></div>
+  <!-- Scrolling text row -->
+  <div class="tick-scroll-row">
+    <div id="tick-track">
+      <!-- JS se populate hoga -->
+    </div>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -233,7 +259,7 @@ const S = {
 // ===========================================================
 const E = {
   ov:       document.getElementById('ov'),
-  hl:       document.getElementById('hl'),
+  hl:       null, // ab ticker mein hai
   vid:      document.getElementById('vid'),
   voAudio:  document.getElementById('vo-audio'),
   img:      document.getElementById('img'),
@@ -259,7 +285,9 @@ const E = {
   vpt:      document.getElementById('vpt'),
   vpb:      document.getElementById('vpb'),
   btnP:     document.getElementById('btnP'),
-  btnM:     document.getElementById('btnM')
+  btnM:     document.getElementById('btnM'),
+  track:    document.getElementById('tick-track'),
+  trans:    document.getElementById('trans')
 };
 
 // ===========================================================
@@ -270,6 +298,131 @@ setInterval(() => {
   E.clk.innerText = n.toLocaleTimeString('hi-IN', { hour12:false });
   E.dt.innerText  = n.toLocaleDateString('hi-IN', { weekday:'short', day:'numeric', month:'short' });
 }, 1000);
+
+// ===========================================================
+//  SCROLLING TICKER
+//  Saari khabarein left se right continuously scroll karti hain
+// ===========================================================
+let tickAnim = null;
+let tickPos  = 0;
+
+function buildTicker(newsArr) {
+  if (!newsArr || !newsArr.length) return;
+  E.track.innerHTML = '';
+  // Double karo - seamless loop ke liye
+  [...newsArr, ...newsArr].forEach((n, i) => {
+    const item = document.createElement('span');
+    item.className = 'tick-item';
+    item.dataset.idx = i % newsArr.length;
+    item.innerText = n.text;
+    E.track.appendChild(item);
+
+    const sep = document.createElement('span');
+    sep.className = 'tick-sep';
+    sep.innerText = '|';
+    E.track.appendChild(sep);
+  });
+  tickPos = 0;
+  startTickerScroll();
+}
+
+function startTickerScroll() {
+  if (tickAnim) cancelAnimationFrame(tickAnim);
+  const speed = 0.5; // pixels per frame - smooth scroll
+  let last = null;
+
+  function step(ts) {
+    if (!last) last = ts;
+    const delta = ts - last;
+    last = ts;
+
+    if (!S.paused) {
+      tickPos -= speed * (delta / 16);
+      const halfW = E.track.scrollWidth / 2;
+      if (Math.abs(tickPos) >= halfW) tickPos = 0; // seamless reset
+      E.track.style.transform = 'translateX(' + tickPos + 'px)';
+    }
+    tickAnim = requestAnimationFrame(step);
+  }
+  tickAnim = requestAnimationFrame(step);
+}
+
+function highlightTicker(idx) {
+  E.track.querySelectorAll('.tick-item').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.idx) === idx);
+  });
+}
+
+// ===========================================================
+//  GREEN SCREEN REMOVER
+//  Canvas par video draw karo, green pixels transparent karo
+// ===========================================================
+let gsCanvas = null, gsCtx = null, gsLoop = null;
+const GS = {
+  enabled:   false,
+  tolerance: 80,    // 0-255: kitna green pakde
+  hue:       120,   // green hue degree
+  hueRange:  40     // +/- range
+};
+
+function enableGreenScreen(on) {
+  GS.enabled = on;
+  if (!on) {
+    if (gsLoop) cancelAnimationFrame(gsLoop);
+    if (gsCanvas) { gsCanvas.style.display='none'; }
+    E.vid.style.display = 'block';
+    return;
+  }
+
+  if (!gsCanvas) {
+    gsCanvas = document.createElement('canvas');
+    gsCanvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;z-index:1;border-radius:8px;';
+    document.getElementById('screen').appendChild(gsCanvas);
+    gsCtx = gsCanvas.getContext('2d', { willReadFrequently: true });
+  }
+
+  gsCanvas.style.display = 'block';
+  E.vid.style.opacity = '0'; // video hide karo, canvas dikhao
+
+  function drawFrame() {
+    if (!GS.enabled || E.vid.paused || E.vid.ended) { gsLoop = requestAnimationFrame(drawFrame); return; }
+    gsCanvas.width  = E.vid.videoWidth  || 640;
+    gsCanvas.height = E.vid.videoHeight || 360;
+    gsCtx.drawImage(E.vid, 0, 0, gsCanvas.width, gsCanvas.height);
+
+    const imgData = gsCtx.getImageData(0, 0, gsCanvas.width, gsCanvas.height);
+    const d = imgData.data;
+
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i+1], b = d[i+2];
+      // Green check: green sabse zyada ho, aur background-ish ho
+      if (g > 80 && g > r * 1.4 && g > b * 1.4) {
+        d[i+3] = 0; // transparent
+      }
+    }
+    gsCtx.putImageData(imgData, 0, 0);
+    gsLoop = requestAnimationFrame(drawFrame);
+  }
+  gsLoop = requestAnimationFrame(drawFrame);
+}
+
+// ===========================================================
+//  SCENE TRANSITIONS
+//  Random cinematic transition between news items
+// ===========================================================
+const transitions = ['t-flash', 't-wipe', 't-zoom', 't-glitch'];
+let lastTrans = -1;
+
+async function doTransition() {
+  let t;
+  do { t = Math.floor(Math.random() * transitions.length); } while (t === lastTrans);
+  lastTrans = t;
+
+  const cls = transitions[t];
+  E.trans.className = cls;
+  await nap(450); // wait for animation
+  E.trans.className = '';
+}
 
 // ===========================================================
 //  HELPERS
@@ -297,8 +450,13 @@ function loadNews() {
 function refreshNews() {
   const news = loadNews();
   S.news = news;
-  E.tot.innerText  = news.length;
-  E.stxt.innerText = news.length ? news.map(n=>n.text).join('   |   ') : 'PTN News Studio - Admin se khabar upload karo';
+  E.tot.innerText = news.length;
+  if (news.length) {
+    buildTicker(news); // Scrolling ticker update
+    E.stxt.innerText = news[0].text;
+  } else {
+    E.stxt.innerText = 'PTN News Studio - Admin se khabar upload karo';
+  }
   return news.length > 0;
 }
 
@@ -351,16 +509,17 @@ function startPbar(ms) {
 }
 
 // ===========================================================
-//  HEADLINE
+//  HEADLINE - ab ticker mein highlight hota hai
 // ===========================================================
-async function swapHl(txt) {
-  E.hl.classList.add('out'); await nap(300);
-  E.hl.innerText = txt; E.hl.classList.remove('out');
+async function swapHl(txt, idx) {
+  // Ticker mein active item highlight karo
+  highlightTicker(idx);
+  // Top bar mein bhi update
+  E.stxt.innerText = txt;
 }
 
 // ===========================================================
 //  TEXT-TO-SPEECH (TTS)
-//  Saath mein ticker mein text scroll bhi karega
 // ===========================================================
 function doTTS(txt) {
   return new Promise(res => {
@@ -371,22 +530,8 @@ function doTTS(txt) {
     const vs = window.speechSynthesis.getVoices();
     const hi = vs.find(v => v.lang==='hi-IN'||v.lang==='hi'||v.name.toLowerCase().includes('hindi'));
     if (hi) u.voice = hi;
-
-    // TTS ke saath word highlight karo ticker mein
-    u.onboundary = (ev) => {
-      if (ev.name === 'word') {
-        const word = txt.substring(ev.charIndex, ev.charIndex + ev.charLength);
-        E.hl.innerHTML = txt.substring(0, ev.charIndex) +
-          '<span style="color:var(--gold);text-shadow:0 0 10px rgba(245,197,24,0.8)">' + word + '</span>' +
-          txt.substring(ev.charIndex + ev.charLength);
-      }
-    };
-
-    u.onend = () => {
-      E.hl.innerText = txt; // Reset after TTS
-      res();
-    };
-    u.onerror = () => { E.hl.innerText = txt; res(); };
+    u.onend   = res;
+    u.onerror = () => res();
     window.speechSynthesis.speak(u);
   });
 }
@@ -511,8 +656,11 @@ async function play() {
 
   E.cur.innerText = S.idx + 1;
   setSt('On Air', (S.idx+1)+'/'+S.news.length);
-  swapHl(item.text);
+  swapHl(item.text, S.idx);
   clearScr();
+
+  // Scene transition
+  doTransition();
 
   const hasVideo = !!item.videoUrl;
   const hasVO    = !!item.voUrl;
@@ -694,6 +842,14 @@ async function play() {
 // ===========================================================
 //  CONTROLS
 // ===========================================================
+function toggleGS() {
+  GS.enabled = !GS.enabled;
+  const btn = document.getElementById('btnG');
+  btn.classList.toggle('on', GS.enabled);
+  enableGreenScreen(GS.enabled);
+  toast(GS.enabled ? 'Green Screen: ON - Video ka green background hat jaayega' : 'Green Screen: OFF');
+}
+
 function doNext() { S.skip=true; window.speechSynthesis.cancel(); E.voAudio.pause(); E.vid.pause(); clearInterval(S.vpInt); }
 function doPrev() { S.back=true; window.speechSynthesis.cancel(); E.voAudio.pause(); E.vid.pause(); clearInterval(S.vpInt); S.idx=Math.max(0,S.idx-1); }
 
@@ -774,10 +930,11 @@ async function boot() {
 document.addEventListener('keydown', e => {
   switch(e.code) {
     case 'Space': case 'ArrowRight': e.preventDefault(); doNext(); break;
-    case 'ArrowLeft':  e.preventDefault(); doPrev();  break;
-    case 'KeyP':       doPause();  break;
-    case 'KeyM':       doMute();   break;
+    case 'ArrowLeft':  e.preventDefault(); doPrev();   break;
+    case 'KeyP':       doPause();   break;
+    case 'KeyM':       doMute();    break;
     case 'KeyR':       doRefresh(); break;
+    case 'KeyG':       toggleGS();  break;
   }
 });
 
