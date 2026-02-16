@@ -185,8 +185,8 @@ body::after { content:''; position:fixed; inset:0; background:repeating-linear-g
     <div class="anchor-label" id="anchor-label">Khabar pad raha hai...</div>
   </div>
 
-  <!-- Native video player -->
-  <video id="vid" playsinline preload="auto" webkit-playsinline></video>
+  <!-- Native video player - loop lagaya hai -->
+  <video id="vid" playsinline preload="auto" webkit-playsinline loop></video>
   <!-- Hidden audio for Voice Over -->
   <audio id="vo-audio" preload="auto"></audio>
 
@@ -359,7 +359,8 @@ async function swapHl(txt) {
 }
 
 // ===========================================================
-//  TEXT-TO-SPEECH (TTS fallback)
+//  TEXT-TO-SPEECH (TTS)
+//  Saath mein ticker mein text scroll bhi karega
 // ===========================================================
 function doTTS(txt) {
   return new Promise(res => {
@@ -370,7 +371,22 @@ function doTTS(txt) {
     const vs = window.speechSynthesis.getVoices();
     const hi = vs.find(v => v.lang==='hi-IN'||v.lang==='hi'||v.name.toLowerCase().includes('hindi'));
     if (hi) u.voice = hi;
-    u.onend = res; u.onerror = () => res();
+
+    // TTS ke saath word highlight karo ticker mein
+    u.onboundary = (ev) => {
+      if (ev.name === 'word') {
+        const word = txt.substring(ev.charIndex, ev.charIndex + ev.charLength);
+        E.hl.innerHTML = txt.substring(0, ev.charIndex) +
+          '<span style="color:var(--gold);text-shadow:0 0 10px rgba(245,197,24,0.8)">' + word + '</span>' +
+          txt.substring(ev.charIndex + ev.charLength);
+      }
+    };
+
+    u.onend = () => {
+      E.hl.innerText = txt; // Reset after TTS
+      res();
+    };
+    u.onerror = () => { E.hl.innerText = txt; res(); };
     window.speechSynthesis.speak(u);
   });
 }
@@ -407,16 +423,41 @@ function preloadVideo(url) {
 
 // ===========================================================
 //  WAIT FOR MEDIA END
+//  Loop ON hai video mein - isliye video end nahi hogi
+//  VO ke khatam hone par video bhi rokenge
 // ===========================================================
 function waitEnd(el) {
   return new Promise(res => {
     let done = false;
     const finish = () => { if (!done) { done=true; res(); } };
-    el.onended = finish;
-    if (el.ended) { finish(); return; }
+
+    // Agar loop nahi hai tab onended kaam karega
+    if (!el.loop) {
+      el.onended = finish;
+    }
+
+    // Skip/Stop/Back check - har 150ms
     const t = setInterval(() => {
       if (!S.on || S.skip || S.back) { clearInterval(t); finish(); }
-      if (el.ended) { clearInterval(t); finish(); }
+      // Loop OFF hai aur video end ho gayi
+      if (!el.loop && el.ended) { clearInterval(t); finish(); }
+    }, 150);
+  });
+}
+
+// ===========================================================
+//  WAIT FOR VO END - VO khatam ho toh video bhi rok do
+// ===========================================================
+function waitVOEnd() {
+  return new Promise(res => {
+    let done = false;
+    const finish = () => { if (!done) { done=true; res(); } };
+    E.voAudio.onended = finish;
+    E.voAudio.onerror = finish;
+    if (E.voAudio.ended) { finish(); return; }
+    const t = setInterval(() => {
+      if (!S.on || S.skip || S.back) { clearInterval(t); finish(); }
+      if (E.voAudio.ended) { clearInterval(t); finish(); }
     }, 150);
   });
 }
@@ -519,16 +560,16 @@ async function play() {
       setSt('On Air', 'Video + Voice Over');
       startVP(E.vid);
 
-      // Progress bar: jo bhi lamba ho (video ya VO)
+      // Progress bar VO ki duration se
       const vidDur = isNaN(E.vid.duration) ? 0 : E.vid.duration * 1000;
       startPbar(Math.max(vidDur, spMs(item.text)) + 2500);
 
-      // Dono khatam hone ka wait - Promise.all
-      // Jab dono complete ho tab hi next
-      await Promise.all([
-        waitEnd(E.vid),
-        waitEnd(E.voAudio)
-      ]);
+      // VO khatam hone ka wait - video loop chalti rahegi
+      // VO khatam = next news
+      await waitVOEnd();
+
+      // VO khatam - video rok do
+      E.vid.pause();
 
     } else {
       // Video nahi chali - sirf VO chalao
@@ -576,17 +617,22 @@ async function play() {
       const vidDur = isNaN(E.vid.duration) ? 0 : E.vid.duration * 1000;
       startPbar(Math.max(vidDur, spMs(item.text)) + 2500);
 
-      // TTS aur Video ek saath
-      // TTS khatam ho toh video UNMUTE ho jaaye
-      const ttsP = doTTS(item.text).then(() => {
-        // TTS khatam - video ki apni awaaz ab aa sakti hai
-        if (!S.muted) E.vid.muted = false;
-      });
+      // TTS bolo - video loop chalti rahegi saath mein (muted)
+      // TTS khatam hote hi video unmute ho, phir thodi der baad next
+      await doTTS(item.text);
 
-      const vidP = waitEnd(E.vid);
+      // TTS khatam - video unmute karo thodi der ke liye
+      if (!S.muted) E.vid.muted = false;
 
-      // Dono khatam hone ka wait
-      await Promise.all([ttsP, vidP]);
+      // Video ki ek loop poori hone do (max 15 sec)
+      const loopWait = Math.min(
+        isNaN(E.vid.duration) ? 5000 : E.vid.duration * 1000,
+        15000
+      );
+      await waitMs(loopWait);
+
+      // Ab video rok do
+      E.vid.pause();
 
     } else {
       // Video nahi chali - sirf TTS
