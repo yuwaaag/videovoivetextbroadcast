@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PTN News Studio - LIVE</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@600;700&family=Noto+Sans+Devanagari:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --red:   #e8000d;
+  --gold:  #f5c518;
+  --bg:    #060000;
+  --hh:    68px;
+  --th:    96px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); overflow:hidden; font-family:'Noto Sans Devanagari',sans-serif; color:#fff; height:100vh; width:100vw; }
+body::after { content:''; position:fixed; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px); pointer-events:none; z-index:9997; }
+
+/* START OVERLAY */
+#ov { position:fixed; inset:0; background:radial-gradient(ellipse at center,#1a0000,#000 80%); z-index:9000; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:opacity .8s; }
+#ov.gone { opacity:0; pointer-events:none; }
+.big-logo { font-family:'Bebas Neue',sans-serif; font-size:clamp(60px,14vw,140px); color:var(--red); letter-spacing:10px; text-shadow:0 0 60px rgba(232,0,13,.9); animation:pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{text-shadow:0 0 40px rgba(232,0,13,.8);} 50%{text-shadow:0 0 100px rgba(232,0,13,1),0 0 160px rgba(255,60,60,.5);} }
+.tagline { font-family:'Rajdhani',sans-serif; font-size:clamp(12px,2vw,18px); color:var(--gold); letter-spacing:6px; margin:10px 0 50px; text-transform:uppercase; }
+.go-btn { padding:18px 55px; font-size:clamp(16px,2.5vw,24px); font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:3px; color:#fff; background:linear-gradient(135deg,var(--red),#8a0008); border:3px solid var(--gold); border-radius:60px; cursor:pointer; transition:all .3s; box-shadow:0 0 40px rgba(232,0,13,.5); }
+.go-btn:hover { transform:scale(1.08); box-shadow:0 0 80px rgba(232,0,13,.9); }
+.go-hint { margin-top:16px; color:rgba(255,255,255,.2); font-size:11px; letter-spacing:3px; }
+
+/* HEADER */
+.hdr { position:fixed; top:0; left:0; right:0; height:var(--hh); background:linear-gradient(90deg,#5a0000,var(--red) 25%,#ff2020 50%,var(--red) 75%,#5a0000); border-bottom:4px solid var(--gold); display:flex; align-items:center; justify-content:space-between; padding:0 25px; z-index:500; box-shadow:0 4px 30px rgba(0,0,0,.9); }
+.hdr-l { display:flex; align-items:center; gap:16px; }
+.logo { font-family:'Bebas Neue',sans-serif; font-size:clamp(26px,4vw,44px); letter-spacing:5px; color:#fff; }
+.live-pill { display:flex; align-items:center; gap:7px; background:rgba(0,0,0,.4); border:1.5px solid rgba(255,255,255,.3); padding:4px 12px; border-radius:5px; font-family:'Rajdhani',sans-serif; font-size:13px; letter-spacing:2px; }
+.dot { width:9px; height:9px; background:var(--gold); border-radius:50%; animation:blink 1s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.2;} }
+.hdr-r { text-align:right; }
+#clk { font-family:'Rajdhani',sans-serif; font-size:clamp(14px,2vw,24px); font-weight:700; color:var(--gold); letter-spacing:2px; display:block; }
+#dt  { font-size:clamp(9px,1.1vw,11px); color:rgba(255,255,255,.6); letter-spacing:1px; }
+
+/* SCREEN */
+#screen { position:fixed; top:var(--hh); left:0; right:0; bottom:var(--th); background:#020000; display:flex; justify-content:center; align-items:center; overflow:hidden; }
+#screen::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.5) 100%); pointer-events:none; z-index:2; }
+
+/* Media elements */
+#vid { display:none; width:94%; height:92%; object-fit:contain; border:2px solid rgba(245,197,24,.25); border-radius:8px; background:#000; animation:fi .5s ease; }
+#img { display:none; max-width:94%; max-height:92%; object-fit:contain; border:2px solid rgba(245,197,24,.25); border-radius:8px; animation:fi .5s ease; }
+@keyframes fi { from{opacity:0;transform:scale(.97);} to{opacity:1;transform:scale(1);} }
+
+/* Anchor screen (speech phase) */
+#anchor-screen {
+  display:none; width:94%; height:92%;
+  border:2px solid rgba(245,197,24,.15);
+  border-radius:8px; background:linear-gradient(135deg,#0d0000,#1a0000);
+  flex-direction:column; align-items:center; justify-content:center; gap:20px;
+  animation:fi .5s ease;
+}
+.anchor-icon { font-size:56px; animation:breathe 2s ease-in-out infinite; }
+@keyframes breathe { 0%,100%{transform:scale(1);opacity:.8;} 50%{transform:scale(1.05);opacity:1;} }
+.anchor-label { font-family:'Rajdhani',sans-serif; font-size:14px; letter-spacing:4px; color:rgba(255,255,255,.4); text-transform:uppercase; }
+.anchor-wave { display:flex; gap:4px; align-items:center; height:30px; }
+.wave-bar { width:3px; background:var(--red); border-radius:2px; animation:wave 1s ease-in-out infinite; }
+.wave-bar:nth-child(1){animation-delay:.0s;height:8px;}
+.wave-bar:nth-child(2){animation-delay:.1s;height:20px;}
+.wave-bar:nth-child(3){animation-delay:.2s;height:14px;}
+.wave-bar:nth-child(4){animation-delay:.3s;height:24px;}
+.wave-bar:nth-child(5){animation-delay:.4s;height:10px;}
+.wave-bar:nth-child(6){animation-delay:.3s;height:28px;}
+.wave-bar:nth-child(7){animation-delay:.2s;height:16px;}
+.wave-bar:nth-child(8){animation-delay:.1s;height:20px;}
+.wave-bar:nth-child(9){animation-delay:.0s;height:8px;}
+@keyframes wave { 0%,100%{transform:scaleY(.4);} 50%{transform:scaleY(1);} }
+
+#loading { display:flex; flex-direction:column; align-items:center; gap:16px; }
+.spin { width:50px; height:50px; border:4px solid rgba(232,0,13,.2); border-top-color:var(--red); border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg);} }
+.spin-lbl { font-family:'Rajdhani',sans-serif; color:rgba(255,255,255,.3); font-size:11px; letter-spacing:3px; }
+#no-news { display:none; flex-direction:column; align-items:center; gap:10px; opacity:.4; font-size:13px; letter-spacing:2px; }
+#err-box { display:none; flex-direction:column; align-items:center; gap:8px; color:rgba(255,255,255,.4); font-size:13px; }
+#buf { display:none; position:absolute; z-index:3; flex-direction:column; align-items:center; gap:12px; }
+#buf .spin { border-top-color:var(--gold); }
+#buf p { font-family:'Rajdhani',sans-serif; font-size:11px; color:rgba(255,255,255,.4); letter-spacing:2px; }
+
+/* INFO BAR */
+.info { position:fixed; top:calc(var(--hh)+10px); left:0; right:0; display:flex; justify-content:space-between; padding:0 14px; z-index:50; pointer-events:none; }
+.card { background:rgba(0,0,0,.75); backdrop-filter:blur(6px); border:1px solid rgba(245,197,24,.25); border-radius:7px; padding:7px 13px; pointer-events:all; }
+.clbl { font-family:'Rajdhani',sans-serif; font-size:9px; color:rgba(255,255,255,.35); text-transform:uppercase; letter-spacing:1.5px; }
+.cval { font-family:'Rajdhani',sans-serif; font-size:18px; font-weight:700; color:var(--gold); line-height:1.1; }
+
+/* Mode indicator */
+#mode-card { text-align:center; }
+#mode-icon { font-size:20px; }
+#mode-text { font-family:'Rajdhani',sans-serif; font-size:10px; color:rgba(255,255,255,.4); letter-spacing:1.5px; margin-top:2px; }
+
+/* Video progress */
+#vpc { display:none; text-align:center; min-width:120px; }
+#vpt { font-family:'Rajdhani',sans-serif; font-size:15px; font-weight:700; color:var(--gold); }
+#vpb-bg { width:100px; height:3px; background:rgba(255,255,255,.1); border-radius:2px; margin:4px auto 0; overflow:hidden; }
+#vpb { height:100%; width:0%; background:var(--gold); border-radius:2px; transition:width .5s linear; }
+
+/* PROGRESS LINE */
+#pbar { position:fixed; bottom:var(--th); left:0; height:3px; width:0%; background:var(--gold); z-index:501; box-shadow:0 0 8px rgba(245,197,24,.6); }
+
+/* CONTROLS */
+.ctrls { position:fixed; top:50%; right:12px; transform:translateY(-50%); display:flex; flex-direction:column; gap:9px; z-index:100; }
+.btn { width:40px; height:40px; background:rgba(0,0,0,.72); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.15); border-radius:50%; color:#fff; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .2s; }
+.btn:hover { background:rgba(232,0,13,.4); border-color:var(--gold); transform:scale(1.1); }
+.btn.on { background:rgba(232,0,13,.7); border-color:var(--gold); }
+
+/* TICKER */
+.ticker { position:fixed; bottom:0; left:0; right:0; height:var(--th); background:linear-gradient(90deg,#6a0000,var(--red) 15%,var(--red) 85%,#6a0000); border-top:4px solid var(--gold); z-index:500; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 -4px 20px rgba(0,0,0,.9); }
+.tick-top { display:flex; align-items:center; gap:10px; padding:3px 14px 2px; background:rgba(0,0,0,.2); border-bottom:1px solid rgba(245,197,24,.2); flex-shrink:0; }
+.brk { background:var(--gold); color:#000; font-family:'Rajdhani',sans-serif; font-size:9px; font-weight:900; padding:2px 8px; border-radius:3px; letter-spacing:2px; white-space:nowrap; animation:flash 1.5s ease-in-out infinite; }
+@keyframes flash { 0%,100%{opacity:1;} 50%{opacity:.5;} }
+#stxt { font-family:'Rajdhani',sans-serif; font-size:10px; color:rgba(255,255,255,.55); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; flex:1; }
+.hl-wrap { flex:1; display:flex; align-items:center; padding:0 18px; overflow:hidden; }
+#hl { font-size:clamp(15px,2.8vw,32px); font-weight:700; color:#fff; text-shadow:2px 2px 4px rgba(0,0,0,.8); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; transition:opacity .3s,transform .3s; }
+#hl.out { opacity:0; transform:translateY(8px); }
+
+/* TOAST */
+#toast { position:fixed; top:calc(var(--hh)+12px); left:50%; transform:translateX(-50%) translateY(-10px); background:rgba(10,0,0,.95); border:2px solid var(--red); border-radius:9px; padding:10px 18px; color:#fff; font-size:13px; z-index:2000; opacity:0; transition:all .3s; text-align:center; max-width:88vw; pointer-events:none; }
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- OVERLAY -->
+<div id="ov">
+  <div class="big-logo">PTN NEWS</div>
+  <div class="tagline">Sach Ki Awaaz - Voice of Truth</div>
+  <button class="go-btn" onclick="boot()">LIVE BROADCAST SHURU KAREIN</button>
+  <p class="go-hint">CLICK TO BEGIN</p>
+</div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-l">
+    <div class="logo">PTN NEWS</div>
+    <div class="live-pill"><div class="dot"></div><span>LIVE</span></div>
+  </div>
+  <div class="hdr-r">
+    <span id="clk">--:--:--</span>
+    <span id="dt"></span>
+  </div>
+</div>
+
+<!-- INFO BAR -->
+<div class="info">
+  <div class="card">
+    <div class="clbl">Khabar</div>
+    <div class="cval"><span id="cur">0</span>/<span id="tot">0</span></div>
+  </div>
+  <div class="card" id="mode-card">
+    <div id="mode-icon">&#127897;</div>
+    <div id="mode-text">READY</div>
+  </div>
+  <div class="card" id="vpc">
+    <div class="clbl">Media</div>
+    <div id="vpt">0:00</div>
+    <div id="vpb-bg"><div id="vpb"></div></div>
+  </div>
+  <div class="card" style="text-align:right">
+    <div class="clbl" id="stl">Status</div>
+    <div class="cval" style="font-size:13px" id="stv">Starting...</div>
+  </div>
+</div>
+
+<!-- SCREEN -->
+<div id="screen">
+  <div id="loading"><div class="spin"></div><div class="spin-lbl">LOADING...</div></div>
+  <div id="no-news" style="flex-direction:column;align-items:center;gap:10px;">
+    <span style="font-size:44px;">&#128240;</span>
+    <span>Admin Panel se khabar upload karo</span>
+  </div>
+  <div id="err-box"><span style="font-size:40px;">&#9888;</span><div id="err-msg">Error</div></div>
+
+  <!-- Anchor screen: speech phase mein dikhta hai -->
+  <div id="anchor-screen">
+    <div class="anchor-icon">&#127897;</div>
+    <div class="anchor-wave">
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+    </div>
+    <div class="anchor-label" id="anchor-label">Khabar pad raha hai...</div>
+  </div>
+
+  <!-- Native video player -->
+  <video id="vid" playsinline preload="auto" webkit-playsinline></video>
+  <!-- Hidden audio for Voice Over -->
+  <audio id="vo-audio" preload="auto"></audio>
+
+  <img id="img" src="" alt="News">
+  <div id="buf"><div class="spin"></div><p>LOAD HO RAHA HAI...</p></div>
+</div>
+
+<!-- CONTROLS -->
+<div class="ctrls">
+  <button class="btn" onclick="doNext()"    title="Next [->]">&#9197;</button>
+  <button class="btn" id="btnP" onclick="doPause()" title="Pause [P]">&#9208;</button>
+  <button class="btn" onclick="doPrev()"    title="Prev [<-]">&#9196;</button>
+  <button class="btn" id="btnM" onclick="doMute()"  title="Mute [M]">&#128266;</button>
+  <button class="btn" onclick="doRefresh()" title="Refresh [R]">&#128260;</button>
+</div>
+
+<div id="pbar"></div>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="tick-top">
+    <div class="brk">LIVE</div>
+    <div style="width:1px;height:10px;background:rgba(255,255,255,.2);flex-shrink:0;"></div>
+    <div id="stxt">PTN News...</div>
+  </div>
+  <div class="hl-wrap"><div id="hl">Data load ho raha hai...</div></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ===========================================================
+//  STATE
+// ===========================================================
+const S = {
+  news: [], idx: 0,
+  on: false, paused: false, muted: false,
+  skip: false, back: false,
+  vpInt: null
+};
+
+// ===========================================================
+//  DOM
+// ===========================================================
+const E = {
+  ov:       document.getElementById('ov'),
+  hl:       document.getElementById('hl'),
+  vid:      document.getElementById('vid'),
+  voAudio:  document.getElementById('vo-audio'),
+  img:      document.getElementById('img'),
+  anchor:   document.getElementById('anchor-screen'),
+  anchorLbl:document.getElementById('anchor-label'),
+  loading:  document.getElementById('loading'),
+  noNews:   document.getElementById('no-news'),
+  errBox:   document.getElementById('err-box'),
+  errMsg:   document.getElementById('err-msg'),
+  buf:      document.getElementById('buf'),
+  cur:      document.getElementById('cur'),
+  tot:      document.getElementById('tot'),
+  modeIcon: document.getElementById('mode-icon'),
+  modeTxt:  document.getElementById('mode-text'),
+  stl:      document.getElementById('stl'),
+  stv:      document.getElementById('stv'),
+  pbar:     document.getElementById('pbar'),
+  clk:      document.getElementById('clk'),
+  dt:       document.getElementById('dt'),
+  toast:    document.getElementById('toast'),
+  stxt:     document.getElementById('stxt'),
+  vpc:      document.getElementById('vpc'),
+  vpt:      document.getElementById('vpt'),
+  vpb:      document.getElementById('vpb'),
+  btnP:     document.getElementById('btnP'),
+  btnM:     document.getElementById('btnM')
+};
+
+// ===========================================================
+//  CLOCK
+// ===========================================================
+setInterval(() => {
+  const n = new Date();
+  E.clk.innerText = n.toLocaleTimeString('hi-IN', { hour12:false });
+  E.dt.innerText  = n.toLocaleDateString('hi-IN', { weekday:'short', day:'numeric', month:'short' });
+}, 1000);
+
+// ===========================================================
+//  HELPERS
+// ===========================================================
+const nap   = ms => new Promise(r => setTimeout(r, ms));
+const toMmSs = s => { s=Math.max(0,Math.floor(s)); return Math.floor(s/60)+':'+ String(s%60).padStart(2,'0'); };
+
+function toast(msg, ms=4000) {
+  E.toast.innerHTML = msg;
+  E.toast.classList.add('show');
+  setTimeout(() => E.toast.classList.remove('show'), ms);
+}
+function setSt(l,v) { E.stl.innerText=l; E.stv.innerText=v; }
+function setMode(icon, txt) { E.modeIcon.innerText=icon; E.modeTxt.innerText=txt; }
+
+// ===========================================================
+//  LOAD NEWS FROM LOCALSTORAGE (Admin panel ne save kiya)
+// ===========================================================
+function loadNews() {
+  const raw = localStorage.getItem('ptn_news');
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch(e) { return []; }
+}
+
+function refreshNews() {
+  const news = loadNews();
+  S.news = news;
+  E.tot.innerText  = news.length;
+  E.stxt.innerText = news.length ? news.map(n=>n.text).join('   |   ') : 'PTN News Studio - Admin se khabar upload karo';
+  return news.length > 0;
+}
+
+// ===========================================================
+//  CLEAR SCREEN
+// ===========================================================
+function clearScr() {
+  E.vid.pause();
+  E.vid.removeAttribute('src');
+  E.vid.load();
+  E.vid.style.display    = 'none';
+  E.voAudio.pause();
+  E.voAudio.removeAttribute('src');
+  E.voAudio.load();
+  E.img.src              = '';
+  E.img.style.display    = 'none';
+  E.anchor.style.display = 'none';
+  E.noNews.style.display = 'none';
+  E.errBox.style.display = 'none';
+  E.loading.style.display= 'none';
+  E.buf.style.display    = 'none';
+  E.vpc.style.display    = 'none';
+  clearInterval(S.vpInt);
+  window.speechSynthesis.cancel();
+}
+
+// ===========================================================
+//  VIDEO PROGRESS
+// ===========================================================
+function startVP(el) {
+  clearInterval(S.vpInt);
+  E.vpc.style.display = 'block';
+  S.vpInt = setInterval(() => {
+    if (!el.duration || isNaN(el.duration)) return;
+    const pct = (el.currentTime / el.duration) * 100;
+    E.vpb.style.width = pct + '%';
+    E.vpt.innerText   = toMmSs(el.currentTime) + ' / ' + toMmSs(el.duration);
+  }, 500);
+}
+
+// ===========================================================
+//  PROGRESS BAR
+// ===========================================================
+function startPbar(ms) {
+  E.pbar.style.transition='none'; E.pbar.style.width='0%';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    E.pbar.style.transition='width '+ms+'ms linear';
+    E.pbar.style.width='100%';
+  }));
+}
+
+// ===========================================================
+//  HEADLINE
+// ===========================================================
+async function swapHl(txt) {
+  E.hl.classList.add('out'); await nap(300);
+  E.hl.innerText = txt; E.hl.classList.remove('out');
+}
+
+// ===========================================================
+//  TEXT-TO-SPEECH (TTS fallback)
+// ===========================================================
+function doTTS(txt) {
+  return new Promise(res => {
+    if (S.muted) { res(); return; }
+    window.speechSynthesis.cancel();
+    const u  = new SpeechSynthesisUtterance(txt);
+    u.lang   = 'hi-IN'; u.rate = 0.88; u.volume = 1;
+    const vs = window.speechSynthesis.getVoices();
+    const hi = vs.find(v => v.lang==='hi-IN'||v.lang==='hi'||v.name.toLowerCase().includes('hindi'));
+    if (hi) u.voice = hi;
+    u.onend = res; u.onerror = () => res();
+    window.speechSynthesis.speak(u);
+  });
+}
+
+// ===========================================================
+//  LOAD & PLAY AUDIO (Voice Over)
+// ===========================================================
+function playVO(url) {
+  return new Promise(res => {
+    E.voAudio.src = url;
+    E.voAudio.muted = S.muted;
+    E.voAudio.volume = 1;
+    E.voAudio.onended = res;
+    E.voAudio.onerror = () => res();
+    E.voAudio.play().catch(() => res());
+  });
+}
+
+// ===========================================================
+//  LOAD VIDEO (preload background mein)
+// ===========================================================
+function preloadVideo(url) {
+  return new Promise((ok, fail) => {
+    E.vid.src = url;
+    E.vid.muted = true; // Pehle muted
+    E.vid.load();
+    let settled = false;
+    const done = (s) => { if (!settled) { settled=true; s?ok():fail(new Error('Video load fail')); } };
+    const t = setTimeout(() => done(false), 20000);
+    E.vid.oncanplay = () => { clearTimeout(t); done(true); };
+    E.vid.onerror   = () => { clearTimeout(t); done(false); };
+  });
+}
+
+// ===========================================================
+//  WAIT FOR MEDIA END
+// ===========================================================
+function waitEnd(el) {
+  return new Promise(res => {
+    let done = false;
+    const finish = () => { if (!done) { done=true; res(); } };
+    el.onended = finish;
+    if (el.ended) { finish(); return; }
+    const t = setInterval(() => {
+      if (!S.on || S.skip || S.back) { clearInterval(t); finish(); }
+      if (el.ended) { clearInterval(t); finish(); }
+    }, 150);
+  });
+}
+
+// ===========================================================
+//  INTERRUPTIBLE WAIT
+// ===========================================================
+function waitMs(ms) {
+  return new Promise(res => {
+    let e = 0;
+    const t = setInterval(() => {
+      if (!S.on || S.skip || S.back) { clearInterval(t); res(); return; }
+      if (!S.paused) e += 100;
+      if (e >= ms) { clearInterval(t); res(); }
+    }, 100);
+  });
+}
+
+// ===========================================================
+//  SPEECH DURATION ESTIMATE
+// ===========================================================
+const spMs = txt => Math.max(3000, Math.ceil((txt.length / (2.5 * 0.88)) * 1000));
+
+// ===========================================================
+//
+//  MAIN PLAY LOGIC - TEENO CASES KA SMART HANDLING
+//
+//  CASE 1: Video hai + VO hai
+//    Step 1 -> Anchor screen dikhao + VO bolao (video background mein load)
+//    Step 2 -> Video start, VO khatam = Video ko mute kar (already playing)
+//             Ya VO ke baad Video unmuted chalao
+//
+//  CASE 2: Video hai + VO nahi
+//    Step 1 -> Anchor screen + TTS bolo (video background load)
+//    Step 2 -> TTS khatam -> Video unmuted chalao
+//
+//  CASE 3: Sirf Image ya kuch nahi
+//    -> Image/anchor screen dikhao + TTS bolo
+//
+// ===========================================================
+async function play() {
+  if (!S.on || !S.news.length) return;
+
+  while (S.paused) { await nap(200); if (!S.on) return; }
+
+  if (S.idx >= S.news.length) S.idx = 0;
+  if (S.idx < 0) S.idx = S.news.length - 1;
+
+  const item = S.news[S.idx];
+  S.skip = false; S.back = false;
+
+  E.cur.innerText = S.idx + 1;
+  setSt('On Air', (S.idx+1)+'/'+S.news.length);
+  swapHl(item.text);
+  clearScr();
+
+  const hasVideo = !!item.videoUrl;
+  const hasVO    = !!item.voUrl;
+  const hasImg   = !!item.imgUrl;
+
+  console.log('[PTN] Item:', S.idx+1, {hasVideo, hasVO, hasImg});
+
+  // ========================================================
+  //  CASE 1: Video + VO dono hain
+  //  Video screen par chalti hai (MUTED)
+  //  VO ki awaaz saath mein aati hai
+  //  Dono ek saath start, jo pehle khatam ho uska wait nahi
+  //  Jab DONO khatam - tab next news
+  // ========================================================
+  if (hasVideo && hasVO) {
+
+    // Step 1: Video load karo (muted)
+    E.buf.style.display = 'flex';
+    setSt('Loading', 'Video + VO load ho rahe hain...');
+    setMode('&#127916;', 'VIDEO + VO');
+
+    let videoOk = false;
+    try {
+      await preloadVideo(item.videoUrl);
+      videoOk = true;
+    } catch(e) {
+      console.warn('[PTN] Video preload fail:', e.message);
+    }
+    E.buf.style.display = 'none';
+
+    if (videoOk) {
+      // Video screen par dikhao - MUTED (VO ki awaaz aayegi)
+      E.vid.style.display = 'block';
+      E.vid.muted = true; // Video ki awaaz band - VO chalega
+
+      try { await E.vid.play(); }
+      catch(e) { console.warn('[PTN] vid play fail:', e); }
+
+      // VO load + play karo
+      E.voAudio.src    = item.voUrl;
+      E.voAudio.muted  = S.muted;
+      E.voAudio.volume = 1;
+      E.voAudio.play().catch(() => {});
+
+      setSt('On Air', 'Video + Voice Over');
+      startVP(E.vid);
+
+      // Progress bar: jo bhi lamba ho (video ya VO)
+      const vidDur = isNaN(E.vid.duration) ? 0 : E.vid.duration * 1000;
+      startPbar(Math.max(vidDur, spMs(item.text)) + 2500);
+
+      // Dono khatam hone ka wait - Promise.all
+      // Jab dono complete ho tab hi next
+      await Promise.all([
+        waitEnd(E.vid),
+        waitEnd(E.voAudio)
+      ]);
+
+    } else {
+      // Video nahi chali - sirf VO chalao
+      E.anchor.style.display = 'flex';
+      E.anchorLbl.innerText  = 'Voice Over chal raha hai...';
+      setMode('&#127908;', 'VOICE OVER');
+      startPbar(spMs(item.text) * 1.5);
+      await playVO(item.voUrl);
+    }
+
+    clearInterval(S.vpInt);
+    E.vpc.style.display = 'none';
+
+  // ========================================================
+  //  CASE 2: Video hai, VO nahi - TTS bolo + Video chalao
+  //  Video MUTED + TTS ek saath
+  //  TTS khatam hone ke baad video unmuted chalti rahe
+  // ========================================================
+  } else if (hasVideo && !hasVO) {
+
+    E.buf.style.display = 'flex';
+    setSt('Loading', 'Video load ho rahi hai...');
+
+    let videoOk = false;
+    try {
+      await preloadVideo(item.videoUrl);
+      videoOk = true;
+    } catch(e) {
+      console.warn('[PTN] Video preload fail:', e.message);
+    }
+    E.buf.style.display = 'none';
+
+    if (videoOk) {
+      // Video dikhao - pehle MUTED (TTS bolega)
+      E.vid.style.display = 'block';
+      E.vid.muted = true;
+
+      try { await E.vid.play(); }
+      catch(e) { console.warn('[PTN] vid play fail:', e); }
+
+      setSt('On Air', 'Video + TTS');
+      setMode('&#127897;', 'VIDEO + TTS');
+      startVP(E.vid);
+
+      const vidDur = isNaN(E.vid.duration) ? 0 : E.vid.duration * 1000;
+      startPbar(Math.max(vidDur, spMs(item.text)) + 2500);
+
+      // TTS aur Video ek saath
+      // TTS khatam ho toh video UNMUTE ho jaaye
+      const ttsP = doTTS(item.text).then(() => {
+        // TTS khatam - video ki apni awaaz ab aa sakti hai
+        if (!S.muted) E.vid.muted = false;
+      });
+
+      const vidP = waitEnd(E.vid);
+
+      // Dono khatam hone ka wait
+      await Promise.all([ttsP, vidP]);
+
+    } else {
+      // Video nahi chali - sirf TTS
+      E.anchor.style.display = 'flex';
+      E.anchorLbl.innerText  = 'Khabar pad raha hai...';
+      setMode('&#127897;', 'TTS');
+      startPbar(spMs(item.text));
+      await doTTS(item.text);
+    }
+
+    clearInterval(S.vpInt);
+    E.vpc.style.display = 'none';
+
+  // ========================================================
+  //  CASE 3: Sirf Image
+  // ========================================================
+  } else if (hasImg) {
+    setMode('&#128444;', 'IMAGE');
+    setSt('Image', 'Chal rahi hai...');
+    E.img.style.display = 'block';
+    E.img.src = item.imgUrl;
+
+    const ms = spMs(item.text);
+    startPbar(ms + 2500);
+    startPbar(ms);
+
+    if (hasVO) {
+      await playVO(item.voUrl);
+    } else {
+      await doTTS(item.text);
+    }
+
+  // ========================================================
+  //  CASE 4: Sirf Text (kuch upload nahi)
+  // ========================================================
+  } else {
+    setMode('&#127897;', 'TTS');
+    setSt('Anchor', 'Khabar pad raha hai...');
+    E.anchor.style.display = 'flex';
+    E.anchorLbl.innerText  = 'Khabar pad raha hai...';
+
+    const ms = spMs(item.text);
+    startPbar(ms + 2500);
+
+    if (hasVO) {
+      await playVO(item.voUrl);
+    } else {
+      await doTTS(item.text);
+    }
+  }
+
+  // Gap between news
+  await waitMs(2500);
+  if (!S.on) return;
+  S.idx += S.back ? -1 : 1;
+  play();
+}
+
+// ===========================================================
+//  CONTROLS
+// ===========================================================
+function doNext() { S.skip=true; window.speechSynthesis.cancel(); E.voAudio.pause(); E.vid.pause(); clearInterval(S.vpInt); }
+function doPrev() { S.back=true; window.speechSynthesis.cancel(); E.voAudio.pause(); E.vid.pause(); clearInterval(S.vpInt); S.idx=Math.max(0,S.idx-1); }
+
+function doPause() {
+  S.paused = !S.paused;
+  E.btnP.innerHTML = S.paused ? '&#9654;' : '&#9208;';
+  E.btnP.classList.toggle('on', S.paused);
+  if (S.paused) {
+    window.speechSynthesis.cancel();
+    E.vid.pause(); E.voAudio.pause();
+    setSt('Paused', 'Ruka hua');
+  } else {
+    E.vid.play().catch(()=>{});
+    E.voAudio.play().catch(()=>{});
+    setSt('On Air', 'Resume...');
+  }
+}
+
+function doMute() {
+  S.muted = !S.muted;
+  E.vid.muted      = S.muted;
+  E.voAudio.muted  = S.muted;
+  E.btnM.innerHTML = S.muted ? '&#128263;' : '&#128266;';
+  E.btnM.classList.toggle('on', S.muted);
+  if (S.muted) window.speechSynthesis.cancel();
+}
+
+function doRefresh() {
+  window.speechSynthesis.cancel();
+  clearScr(); clearInterval(S.vpInt);
+  const ok = refreshNews();
+  E.loading.style.display = 'none';
+  if (!ok) { E.noNews.style.display='flex'; setSt('Empty','Khabar nahi'); return; }
+  toast('Khabarein refresh ho gayi - ' + S.news.length + ' found');
+  if (S.on) { S.idx=0; play(); }
+}
+
+// ===========================================================
+//  AUTO REFRESH (every 30 seconds from localStorage)
+// ===========================================================
+setInterval(() => {
+  if (S.on) refreshNews();
+}, 30000);
+
+// ===========================================================
+//  BOOT
+// ===========================================================
+async function boot() {
+  E.ov.classList.add('gone');
+  setTimeout(() => E.ov.style.display='none', 800);
+  E.loading.style.display = 'flex';
+
+  // Voice warmup
+  window.speechSynthesis.cancel();
+  const w = new SpeechSynthesisUtterance(' ');
+  w.volume=0; window.speechSynthesis.speak(w);
+
+  if (!window.speechSynthesis.getVoices().length) {
+    await new Promise(r => { window.speechSynthesis.onvoiceschanged=r; setTimeout(r,2000); });
+  }
+
+  const ok = refreshNews();
+  E.loading.style.display = 'none';
+
+  if (ok) {
+    S.on = true;
+    play();
+  } else {
+    E.noNews.style.display = 'flex';
+    setSt('Empty', 'Khabar nahi');
+    toast('Admin Panel se pehle khabar upload karo!', 7000);
+  }
+}
+
+// ===========================================================
+//  KEYBOARD
+// ===========================================================
+document.addEventListener('keydown', e => {
+  switch(e.code) {
+    case 'Space': case 'ArrowRight': e.preventDefault(); doNext(); break;
+    case 'ArrowLeft':  e.preventDefault(); doPrev();  break;
+    case 'KeyP':       doPause();  break;
+    case 'KeyM':       doMute();   break;
+    case 'KeyR':       doRefresh(); break;
+  }
+});
+
+window.speechSynthesis.getVoices();
+</script>
+</body>
+</html>
