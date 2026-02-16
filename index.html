@@ -226,6 +226,25 @@ body::after { content:''; position:fixed; inset:0; background:repeating-linear-g
 <!-- SCENE TRANSITION OVERLAY -->
 <div id="trans"></div>
 
+<!-- Hidden background file picker -->
+<input type="file" id="bg-picker" accept="image/*,video/*" style="display:none" onchange="setBGFile(this.files[0]);this.value='';">
+
+<!-- Green Screen Panel (hidden by default) -->
+<div id="gs-panel" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,0,0,0.97);border:2px solid rgba(245,197,24,0.4);border-radius:14px;padding:24px 28px;z-index:2000;min-width:280px;box-shadow:0 0 40px rgba(0,0,0,0.8);">
+  <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#f5c518;letter-spacing:3px;margin-bottom:16px;">GREEN SCREEN</div>
+  <div style="margin-bottom:14px;">
+    <div style="font-family:'Rajdhani',sans-serif;font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:6px;">SENSITIVITY (kitna green hatao)</div>
+    <input type="range" min="10" max="80" value="35" style="width:100%;accent-color:#f5c518;" oninput="GS.sensitivity=this.value/100;document.getElementById('gs-val').innerText=this.value+'%'">
+    <span id="gs-val" style="font-family:'Rajdhani',sans-serif;font-size:12px;color:#f5c518;">35%</span>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:8px;">
+    <button id="gs-toggle-btn" onclick="toggleGSActive()" style="padding:10px;background:rgba(0,200,80,0.15);border:1px solid rgba(0,200,80,0.4);border-radius:7px;color:#4dff88;font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;letter-spacing:2px;cursor:pointer;">GREEN SCREEN ON KARO</button>
+    <button onclick="document.getElementById('bg-picker').click()" style="padding:10px;background:rgba(245,197,24,0.1);border:1px solid rgba(245,197,24,0.3);border-radius:7px;color:#f5c518;font-family:'Rajdhani',sans-serif;font-size:14px;letter-spacing:2px;cursor:pointer;">BACKGROUND UPLOAD (Photo/Video)</button>
+    <button onclick="clearBG()" style="padding:10px;background:rgba(255,0,0,0.1);border:1px solid rgba(255,0,0,0.2);border-radius:7px;color:#ff6666;font-family:'Rajdhani',sans-serif;font-size:14px;letter-spacing:2px;cursor:pointer;">BACKGROUND HATAO</button>
+    <button onclick="document.getElementById('gs-panel').style.display='none'" style="padding:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:7px;color:rgba(255,255,255,0.5);font-family:'Rajdhani',sans-serif;font-size:14px;letter-spacing:2px;cursor:pointer;">CLOSE</button>
+  </div>
+</div>
+
 <!-- TICKER -->
 <div class="ticker">
   <div class="tick-top">
@@ -354,56 +373,125 @@ function highlightTicker(idx) {
 }
 
 // ===========================================================
-//  GREEN SCREEN REMOVER
-//  Canvas par video draw karo, green pixels transparent karo
+//  GREEN SCREEN REMOVER - Fixed Version
+//  Video nahi rukegi - canvas overlay use karta hai
+//  Custom background bhi set kar sakte hain
 // ===========================================================
 let gsCanvas = null, gsCtx = null, gsLoop = null;
-const GS = {
-  enabled:   false,
-  tolerance: 80,    // 0-255: kitna green pakde
-  hue:       120,   // green hue degree
-  hueRange:  40     // +/- range
-};
+let bgEl = null; // background element (img ya video)
+const GS = { enabled: false, sensitivity: 0.35 };
 
-function enableGreenScreen(on) {
-  GS.enabled = on;
-  if (!on) {
-    if (gsLoop) cancelAnimationFrame(gsLoop);
-    if (gsCanvas) { gsCanvas.style.display='none'; }
-    E.vid.style.display = 'block';
-    return;
-  }
+function setupGSCanvas() {
+  if (gsCanvas) return;
+  const screen = document.getElementById('screen');
 
-  if (!gsCanvas) {
-    gsCanvas = document.createElement('canvas');
-    gsCanvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;z-index:1;border-radius:8px;';
-    document.getElementById('screen').appendChild(gsCanvas);
-    gsCtx = gsCanvas.getContext('2d', { willReadFrequently: true });
-  }
+  // Background element (peeche rahega)
+  bgEl = document.createElement('div');
+  bgEl.id = 'gs-bg';
+  bgEl.style.cssText = 'position:absolute;inset:0;z-index:0;display:none;overflow:hidden;border-radius:8px;';
+  screen.insertBefore(bgEl, screen.firstChild);
 
-  gsCanvas.style.display = 'block';
-  E.vid.style.opacity = '0'; // video hide karo, canvas dikhao
+  // Canvas (video ke upar, green pixels transparent)
+  gsCanvas = document.createElement('canvas');
+  gsCanvas.id = 'gs-canvas';
+  gsCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:3;display:none;pointer-events:none;';
+  screen.appendChild(gsCanvas);
+  gsCtx = gsCanvas.getContext('2d', { willReadFrequently: true });
+}
+
+function startGSLoop() {
+  if (gsLoop) cancelAnimationFrame(gsLoop);
 
   function drawFrame() {
-    if (!GS.enabled || E.vid.paused || E.vid.ended) { gsLoop = requestAnimationFrame(drawFrame); return; }
-    gsCanvas.width  = E.vid.videoWidth  || 640;
-    gsCanvas.height = E.vid.videoHeight || 360;
-    gsCtx.drawImage(E.vid, 0, 0, gsCanvas.width, gsCanvas.height);
+    // Video play ho rahi hai ya nahi - dono case handle karo
+    if (!GS.enabled) return;
 
-    const imgData = gsCtx.getImageData(0, 0, gsCanvas.width, gsCanvas.height);
+    // Canvas size video ke actual resolution se
+    const vw = E.vid.videoWidth  || E.vid.clientWidth  || 640;
+    const vh = E.vid.videoHeight || E.vid.clientHeight || 360;
+    if (gsCanvas.width !== vw)  gsCanvas.width  = vw;
+    if (gsCanvas.height !== vh) gsCanvas.height = vh;
+
+    // Video draw karo canvas par
+    try {
+      gsCtx.drawImage(E.vid, 0, 0, vw, vh);
+    } catch(e) {
+      gsLoop = requestAnimationFrame(drawFrame);
+      return;
+    }
+
+    // Pixel data lo
+    const imgData = gsCtx.getImageData(0, 0, vw, vh);
     const d = imgData.data;
 
+    // Green pixels transparent karo
+    // Sensitivity: 0.3 = strict (sirf pure green), 0.6 = loose (thoda bhi green)
+    const sens = GS.sensitivity;
     for (let i = 0; i < d.length; i += 4) {
       const r = d[i], g = d[i+1], b = d[i+2];
-      // Green check: green sabse zyada ho, aur background-ish ho
-      if (g > 80 && g > r * 1.4 && g > b * 1.4) {
-        d[i+3] = 0; // transparent
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      // Condition: green dominant + saturation enough
+      if (g === max && max > 40 && (g - Math.max(r,b)) > (max - min) * sens) {
+        // Soft edge ke liye partial transparency
+        const strength = Math.min(1, (g - Math.max(r,b)) / 60);
+        d[i+3] = Math.floor(255 * (1 - strength));
       }
     }
     gsCtx.putImageData(imgData, 0, 0);
     gsLoop = requestAnimationFrame(drawFrame);
   }
+
   gsLoop = requestAnimationFrame(drawFrame);
+}
+
+function enableGreenScreen(on) {
+  setupGSCanvas();
+  GS.enabled = on;
+
+  if (!on) {
+    if (gsLoop) { cancelAnimationFrame(gsLoop); gsLoop = null; }
+    gsCanvas.style.display = 'none';
+    bgEl.style.display     = 'none';
+    E.vid.style.opacity    = '1';
+    E.vid.style.zIndex     = '1';
+    return;
+  }
+
+  // Video dikhti rahe magar canvas ke peeche
+  E.vid.style.opacity = '1';
+  E.vid.style.zIndex  = '1';
+  gsCanvas.style.display = 'block';
+  if (bgEl.children.length > 0) bgEl.style.display = 'block';
+  startGSLoop();
+}
+
+// Background set karo - image ya video file
+function setBGFile(file) {
+  setupGSCanvas();
+  const url = URL.createObjectURL(file);
+  bgEl.innerHTML = '';
+
+  if (file.type.startsWith('video/')) {
+    const v = document.createElement('video');
+    v.src = url; v.autoplay = true; v.loop = true; v.muted = true;
+    v.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+    bgEl.appendChild(v);
+  } else {
+    const img = document.createElement('img');
+    img.src = url;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+    bgEl.appendChild(img);
+  }
+
+  bgEl.style.display = GS.enabled ? 'block' : 'none';
+  toast('Background set ho gayi! Ab Green Screen button dabao.');
+}
+
+// Background clear karo
+function clearBG() {
+  if (bgEl) { bgEl.innerHTML = ''; bgEl.style.display = 'none'; }
+  toast('Background hata di.');
 }
 
 // ===========================================================
@@ -843,11 +931,28 @@ async function play() {
 //  CONTROLS
 // ===========================================================
 function toggleGS() {
+  const panel = document.getElementById('gs-panel');
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    panel.style.display = 'none';
+  } else {
+    panel.style.display = 'block';
+  }
+}
+
+function toggleGSActive() {
   GS.enabled = !GS.enabled;
-  const btn = document.getElementById('btnG');
+  const btn    = document.getElementById('btnG');
+  const panBtn = document.getElementById('gs-toggle-btn');
   btn.classList.toggle('on', GS.enabled);
   enableGreenScreen(GS.enabled);
-  toast(GS.enabled ? 'Green Screen: ON - Video ka green background hat jaayega' : 'Green Screen: OFF');
+  if (panBtn) {
+    panBtn.innerText = GS.enabled ? 'GREEN SCREEN OFF KARO' : 'GREEN SCREEN ON KARO';
+    panBtn.style.background = GS.enabled ? 'rgba(255,0,0,0.15)' : 'rgba(0,200,80,0.15)';
+    panBtn.style.borderColor = GS.enabled ? 'rgba(255,0,0,0.4)' : 'rgba(0,200,80,0.4)';
+    panBtn.style.color = GS.enabled ? '#ff6666' : '#4dff88';
+  }
+  toast(GS.enabled ? 'Green Screen ON - Background dikhegi' : 'Green Screen OFF');
 }
 
 function doNext() { S.skip=true; window.speechSynthesis.cancel(); E.voAudio.pause(); E.vid.pause(); clearInterval(S.vpInt); }
