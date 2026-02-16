@@ -203,7 +203,7 @@ body::after { content:''; position:fixed; inset:0; background:repeating-linear-g
   </div>
 
   <!-- Native video player - loop lagaya hai -->
-  <video id="vid" playsinline preload="auto" webkit-playsinline loop></video>
+  <video id="vid" playsinline preload="auto" webkit-playsinline loop crossorigin="anonymous"></video>
   <!-- Hidden audio for Voice Over -->
   <audio id="vo-audio" preload="auto"></audio>
 
@@ -401,18 +401,16 @@ function setupGSCanvas() {
 
 function startGSLoop() {
   if (gsLoop) cancelAnimationFrame(gsLoop);
+  let corsErrorShown = false;
 
   function drawFrame() {
-    // Video play ho rahi hai ya nahi - dono case handle karo
     if (!GS.enabled) return;
 
-    // Canvas size video ke actual resolution se
     const vw = E.vid.videoWidth  || E.vid.clientWidth  || 640;
     const vh = E.vid.videoHeight || E.vid.clientHeight || 360;
-    if (gsCanvas.width !== vw)  gsCanvas.width  = vw;
+    if (gsCanvas.width  !== vw) gsCanvas.width  = vw;
     if (gsCanvas.height !== vh) gsCanvas.height = vh;
 
-    // Video draw karo canvas par
     try {
       gsCtx.drawImage(E.vid, 0, 0, vw, vh);
     } catch(e) {
@@ -420,20 +418,27 @@ function startGSLoop() {
       return;
     }
 
-    // Pixel data lo
-    const imgData = gsCtx.getImageData(0, 0, vw, vh);
-    const d = imgData.data;
+    let imgData;
+    try {
+      imgData = gsCtx.getImageData(0, 0, vw, vh);
+    } catch(e) {
+      // CORS error - canvas tainted
+      if (!corsErrorShown) {
+        corsErrorShown = true;
+        toast('Green Screen: Cloudinary CORS setting enable karo (neeche instructions dekho)', 8000);
+        console.warn('[GS] CORS error:', e.message);
+      }
+      gsLoop = requestAnimationFrame(drawFrame);
+      return;
+    }
 
-    // Green pixels transparent karo
-    // Sensitivity: 0.3 = strict (sirf pure green), 0.6 = loose (thoda bhi green)
+    const d    = imgData.data;
     const sens = GS.sensitivity;
     for (let i = 0; i < d.length; i += 4) {
       const r = d[i], g = d[i+1], b = d[i+2];
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
-      // Condition: green dominant + saturation enough
       if (g === max && max > 40 && (g - Math.max(r,b)) > (max - min) * sens) {
-        // Soft edge ke liye partial transparency
         const strength = Math.min(1, (g - Math.max(r,b)) / 60);
         d[i+3] = Math.floor(255 * (1 - strength));
       }
@@ -643,8 +648,10 @@ function playVO(url) {
 // ===========================================================
 function preloadVideo(url) {
   return new Promise((ok, fail) => {
-    E.vid.src = url;
-    E.vid.muted = true; // Pehle muted
+    // crossOrigin PEHLE set karo src se - CORS ke liye zaroori
+    E.vid.crossOrigin = 'anonymous';
+    E.vid.src  = url;
+    E.vid.muted = true;
     E.vid.load();
     let settled = false;
     const done = (s) => { if (!settled) { settled=true; s?ok():fail(new Error('Video load fail')); } };
